@@ -32,12 +32,13 @@ namespace BambuMan
         private readonly TagApiService tagApiService;
         private readonly IFilamentOverrideService filamentOverrides;
         private readonly ToastService toasts;
+        private readonly IReadOnlyList<ITagSource> tagSources;
 
 #if !GOOGLE_PLAY
         private bool versionChecked;
 #endif
 
-        public ScannerService(MainPageViewModel viewModel, IInventoryBackendResolver backends, ILogger<ScannerService> logger, IToneGenerator toneGenerator, IInvokeIndent invokeIndent, TagApiService tagApiService, IFilamentOverrideService filamentOverrides, ToastService toasts)
+        public ScannerService(MainPageViewModel viewModel, IInventoryBackendResolver backends, ILogger<ScannerService> logger, IToneGenerator toneGenerator, IInvokeIndent invokeIndent, TagApiService tagApiService, IFilamentOverrideService filamentOverrides, ToastService toasts, IEnumerable<ITagSource> tagSources)
         {
             this.viewModel = viewModel;
             this.backends = backends;
@@ -47,6 +48,11 @@ namespace BambuMan
             this.tagApiService = tagApiService;
             this.filamentOverrides = filamentOverrides;
             this.toasts = toasts;
+            this.tagSources = tagSources.ToList();
+
+            // Core NFC can't authenticate MIFARE Classic sectors, so an iPhone can see a Bambu Lab tag but never read
+            // its filament data. Set before the first backend status change, which reports whether spools can be read.
+            viewModel.PhoneNfcReadsTags = DeviceInfo.Platform != DevicePlatform.iOS;
 
             this.filamentOverrides.LogAction = async void (level, message) =>
             {
@@ -81,6 +87,13 @@ namespace BambuMan
                 manager.OnSpoolFound += ManagerOnSpoolFound;
                 manager.OnSpoolInfoRead += ManagerOnSpoolInfoRead;
                 manager.OnLocationsLoaded += ManagerOnLocationsLoaded;
+            }
+
+            // External readers live as long as the app, like this service.
+            foreach (var source in this.tagSources)
+            {
+                source.OnTagRead += TagSourceOnTagRead;
+                source.OnAvailabilityChanged += TagSourceOnAvailabilityChanged;
             }
 
             viewModel.PropertyChanged += ViewModel_PropertyChanged;
@@ -204,7 +217,8 @@ namespace BambuMan
             {
                 var manager = ActiveManager;
 
-                if (viewModel.SpoolmanConnecting && manager.Status == ManagerStatusType.Ready) await viewModel.ShowInfoMessage("Ready to read spools.");
+                if (viewModel.SpoolmanConnecting && manager.Status == ManagerStatusType.Ready)
+                    await viewModel.ShowInfoMessage(viewModel.CanReadTags ? "Ready to read spools." : $"Connected to {manager.Backend.DisplayName()}.");
 
                 if (manager.Status >= ManagerStatusType.Ready) viewModel.SpoolmanConnecting = false;
 
@@ -375,6 +389,16 @@ namespace BambuMan
         {
             try
             {
+                UpdateExternalReader();
+
+                // Phone NFC is never started on iPhone: the scan page explains why and points to what works.
+                if (!viewModel.PhoneNfcReadsTags)
+                {
+                    viewModel.IsDeviceOs = true;
+                    await viewModel.Validate(ActiveManager);
+                    return;
+                }
+
                 // In order to support Mifare Classic 1K tags (read/write), you must set legacy mode to true.
                 CrossNfc.Legacy = false;
 
@@ -384,8 +408,6 @@ namespace BambuMan
                     viewModel.NfcText = CrossNfc.Current.IsEnabled ? "Enabled" : "Disabled";
 
                     await viewModel.Validate(ActiveManager);
-
-                    if (DeviceInfo.Platform == DevicePlatform.iOS) viewModel.IsDeviceOs = true;
 
                     await AutoStartAsync().ConfigureAwait(false);
                 }
@@ -620,6 +642,32 @@ namespace BambuMan
                 }
             }
         }
+
+        #region External tag readers
+
+        private async void TagSourceOnTagRead(ITagSource source, BambuFilamentInfo info)
+        {
+            try
+            {
+                SentrySdk.Metrics.EmitCounter("nfc.tag.read", 1);
+
+                var json = JsonConvert.SerializeObject(info, Formatting.Indented);
+                await viewModel.AddLog(LogLevel.Information, $"{source.DisplayName}: {json}");
+
+                await InventorySpoolAsync(info);
+            }
+            catch (Exception e)
+            {
+                SentrySdk.Metrics.EmitCounter("nfc.tag.read.failure", 1);
+                logger.LogError(e, "Error in TagSourceOnTagRead");
+            }
+        }
+
+        private void TagSourceOnAvailabilityChanged(ITagSource source) => MainThread.BeginInvokeOnMainThread(UpdateExternalReader);
+
+        private void UpdateExternalReader() => viewModel.ExternalReaderName = tagSources.FirstOrDefault(x => x.IsAvailable)?.DisplayName;
+
+        #endregion
 
         /// <summary>
         /// Event raised when user cancelled NFC session on iOS

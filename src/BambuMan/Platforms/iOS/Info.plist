@@ -29,7 +29,7 @@
 		<key>XSAppIconAssets</key>
 		<string>Assets.xcassets/appicon.appiconset</string>
 		<key>NFCReaderUsageDescription</key>
-		<string>BambuMan uses NFC to read filament spool tags.</string>
+		<string>BambuMan uses NFC only for standard NFC tags. iPhone NFC can't read Bambu Lab spool tags.</string>
 		<key>com.apple.developer.nfc.readersession.iso7816.select-identifiers</key>
 		<array>
 			<string>D2760000850100</string>

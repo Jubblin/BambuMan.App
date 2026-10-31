@@ -38,9 +38,20 @@
         </div>
 
         <div class="card stat stat-@NfcStatus">
-            <div class="stat-label"><Blazicon Svg="Lucide.Nfc" /> NFC</div>
-            <div class="stat-value">@Vm.NfcText</div>
-            @if (!Vm.NfcIsEnabled)
+            <div class="stat-label"><Blazicon Svg="Lucide.Nfc" /> @(Vm.PhoneNfcReadsTags ? "NFC" : "Tag reader")</div>
+            <div class="stat-value">@(Vm.PhoneNfcReadsTags ? Vm.NfcText : Vm.ExternalReaderName ?? "None")</div>
+            @if (!Vm.PhoneNfcReadsTags)
+            {
+                if (Vm.CanReadTags)
+                {
+                    <span class="pill success"><Blazicon Svg="Lucide.Radio" /> Connected</span>
+                }
+                else
+                {
+                    <span class="pill caution"><Blazicon Svg="Lucide.CircleAlert" /> No reader</span>
+                }
+            }
+            else if (!Vm.NfcIsEnabled)
             {
                 <span class="pill error"><Blazicon Svg="Lucide.CircleX" /> Off</span>
             }
@@ -115,17 +126,46 @@
         <SpoolInfoCard Info="Vm.SpoolInfo" OnClose="Scanner.CloseSpool" />
     }
 
-    @if (!Vm.SpoolmanConnecting && !Vm.ShowSpoolEdit && !Vm.ShowSpoolInfo)
+    @if (!Vm.SpoolmanConnecting && !Vm.ShowSpoolEdit && !Vm.ShowSpoolInfo && !Vm.CanReadTags)
+    {
+        @* iPhone without an external reader: say why no tag can be read, and what still works. *@
+        <div class="card">
+            <div class="ready">
+                <div class="ready-icon"><Blazicon Svg="Lucide.Info" /></div>
+                <div>
+                    <div class="ready-title">This iPhone can't read spool tags</div>
+                    <div class="muted small">
+                        Bambu Lab spools use MIFARE Classic tags, which iPhone NFC can't unlock. Support for an external
+                        Bluetooth tag reader is planned. Until then you can still:
+                    </div>
+                </div>
+            </div>
+            <ul class="small no-reader-list">
+                <li>Connect Spoolman or Bambuddy in <a href="settings">Settings</a>, scanning the server's QR code instead of typing the address.</li>
+                <li>Keep spools on this device and import or export them as CSV: turn on <a href="settings">store spools locally</a> with no inventory server.</li>
+                <li>Read tags with BambuMan on an Android phone or the desktop app into the same Spoolman or Bambuddy server.</li>
+            </ul>
+        </div>
+    }
+    else if (!Vm.SpoolmanConnecting && !Vm.ShowSpoolEdit && !Vm.ShowSpoolInfo)
     {
         <div class="card ready">
             <div class="ready-icon"><Blazicon Svg="Lucide.Nfc" /></div>
             <div>
-                <div class="ready-title">@(Vm.NfcIsEnabled ? "Hold a spool tag to your phone" : "NFC is off")</div>
-                <div class="muted small">
-                    @(Vm.NfcIsEnabled
-                        ? "Bambu Lab spools carry a tag on each side of the reel. The read spool shows up here."
-                        : "Turn on NFC in your phone settings to read spool tags.")
-                </div>
+                @if (!Vm.PhoneNfcReadsTags)
+                {
+                    <div class="ready-title">Hold a spool tag to your @Vm.ExternalReaderName</div>
+                    <div class="muted small">Bambu Lab spools carry a tag on each side of the reel. The read spool shows up here.</div>
+                }
+                else
+                {
+                    <div class="ready-title">@(Vm.NfcIsEnabled ? "Hold a spool tag to your phone" : "NFC is off")</div>
+                    <div class="muted small">
+                        @(Vm.NfcIsEnabled
+                            ? "Bambu Lab spools carry a tag on each side of the reel. The read spool shows up here."
+                            : "Turn on NFC in your phone settings to read spool tags.")
+                    </div>
+                }
             </div>
         </div>
     }

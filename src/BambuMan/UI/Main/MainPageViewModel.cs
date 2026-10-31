@@ -27,6 +27,15 @@ namespace BambuMan.UI.Main
         [ObservableProperty] private bool eventsAlreadySubscribed;
         [ObservableProperty] private bool isDeviceOs;
 
+        // False on iPhone: Core NFC can't unlock Bambu Lab (MIFARE Classic) tags, so the phone's NFC is never used there.
+        [ObservableProperty, NotifyPropertyChangedFor(nameof(CanReadTags))] private bool phoneNfcReadsTags = true;
+
+        // Name of a connected external reader (ITagSource), null when there is none.
+        [ObservableProperty, NotifyPropertyChangedFor(nameof(CanReadTags))] private string? externalReaderName;
+
+        /// <summary>Whether anything on this device can read a spool tag right now.</summary>
+        public bool CanReadTags => PhoneNfcReadsTags || ExternalReaderName != null;
+
         [ObservableProperty] private bool showSpoolEdit;
 
         // The read-only counterpart of the edit panel, used by backends with nothing to write to.
@@ -144,7 +153,7 @@ namespace BambuMan.UI.Main
                 SettingsOk = true;
                 SpoolmanOk = manager.Status == ManagerStatusType.Ready;
 
-                if (!SpoolmanConnecting && !NfcIsEnabled)
+                if (!SpoolmanConnecting && PhoneNfcReadsTags && !NfcIsEnabled)
                     await ShowErrorMessage("NFC is not enabled. Check if you're phone supports nfc.");
 
                 return;
@@ -166,7 +175,7 @@ namespace BambuMan.UI.Main
                 return;
             }
 
-            if (!SpoolmanConnecting && !NfcIsEnabled)
+            if (!SpoolmanConnecting && PhoneNfcReadsTags && !NfcIsEnabled)
                 await ShowErrorMessage("NFC is not enabled. Check if you're phone supports nfc.");
         }
 
