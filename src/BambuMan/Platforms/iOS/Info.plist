@@ -34,6 +34,8 @@
 		<array>
 			<string>D2760000850100</string>
 		</array>
+		<key>UIViewControllerBasedStatusBarAppearance</key>
+		<false/>
 		<key>NSCameraUsageDescription</key>
 		<string>BambuMan uses the camera to scan spool QR codes and barcodes.</string>
 	</dict>

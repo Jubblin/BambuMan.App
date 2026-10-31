@@ -8,6 +8,12 @@ namespace BambuMan
         public HostPage()
         {
             InitializeComponent();
+#if IOS
+            BlazorWebView.HandlerChanged += (_, _) =>
+            {
+                if (BlazorWebView.Handler?.PlatformView is WebKit.WKWebView webView) IosBackGesture.Attach(webView);
+            };
+#endif
         }
     }
 }

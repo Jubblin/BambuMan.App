@@ -1,12 +1,28 @@
 using BambuMan.Interfaces;
+using MessageUI;
 
 namespace BambuMan.Implementations
 {
     /// <summary>
-    /// Placeholder so the iOS build resolves <see cref="IInvokeIndent"/>. Does nothing yet; the iOS mail composer comes with the platform services task.
+    /// Opens the Mail composer with the logs. Without a Mail account (and on the simulator) there is no composer, so the
+    /// logs go to the share sheet instead, where the user can pick another mail app, Notes, AirDrop or Copy.
     /// </summary>
     public class IosInvokeIndent : IInvokeIndent
     {
-        public Task SendEmail(string toEmail, string subject, string body) => Task.CompletedTask;
+        public async Task SendEmail(string toEmail, string subject, string body)
+        {
+            if (MFMailComposeViewController.CanSendMail)
+            {
+                await Email.Default.ComposeAsync(new EmailMessage(subject, body, toEmail));
+                return;
+            }
+
+            await Share.Default.RequestAsync(new ShareTextRequest
+            {
+                Title = subject,
+                Subject = subject,
+                Text = $"Send to {toEmail}\r\n\r\n{body}"
+            });
+        }
     }
 }
