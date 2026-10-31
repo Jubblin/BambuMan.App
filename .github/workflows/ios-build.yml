@@ -24,11 +24,11 @@ jobs:
 # MAUI iOS simulator build (unsigned, no secrets)
   build-ios:
     # GA image. Xcode and the iOS workload are pinned as a pair: each .NET for iOS SDK requires one exact Xcode version
-    # (workload set 10.0.401 ships Microsoft.NET.Sdk.iOS 26.5.x, which requires Xcode 26.5). Bump both together.
+    # (workload set 10.0.401 ships Microsoft.NET.Sdk.iOS 26.5.10318, which requires Xcode 26.6). Bump both together.
     runs-on: macos-26
     name: iOS Build
     env:
-      DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       WORKLOAD_VERSION: 10.0.401
     steps:
 
@@ -70,11 +70,13 @@ jobs:
       - name: Install MAUI Android Workload
         run: dotnet workload install maui-android
 
-      - name: Run Tests
-        run: |
-          dotnet test src/BambuMan.Shared.Test/BambuMan.Shared.Test.csproj
-          dotnet test src/SpoolMan.Api.Test/SpoolMan.Api.Test.csproj
-          dotnet test src/Bambuddy.Api.Test/Bambuddy.Api.Test.csproj
-
       - name: Build MAUI Android (unsigned)
         run: dotnet build src/BambuMan/BambuMan.csproj -c Debug -f net10.0-android
+
+      # xunit.v3 test projects run on Microsoft.Testing.Platform, which the .NET 10 SDK's VSTest-mode `dotnet test` rejects; run them directly
+      - name: Run Tests
+        if: ${{ !cancelled() }}
+        run: |
+          dotnet run --project src/BambuMan.Shared.Test/BambuMan.Shared.Test.csproj
+          dotnet run --project src/SpoolMan.Api.Test/SpoolMan.Api.Test.csproj
+          dotnet run --project src/Bambuddy.Api.Test/Bambuddy.Api.Test.csproj
