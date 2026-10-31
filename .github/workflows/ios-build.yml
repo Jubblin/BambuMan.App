@@ -23,7 +23,8 @@ jobs:
 
 # MAUI iOS simulator build (unsigned, no secrets)
   build-ios:
-    runs-on: macos-latest
+    # The current .NET for iOS SDK needs Xcode 27.x, which is only on the xcode-27 image (public preview)
+    runs-on: xcode-27
     name: iOS Build
     steps:
 
