@@ -48,5 +48,6 @@ jobs:
           dotnet --info
           dotnet workload list
 
+      # The NFC entitlements make the simulator build sign the app; CodesignKey=- signs it ad-hoc, so no certificate or secrets are needed
       - name: Build MAUI iOS (simulator)
-        run: dotnet build src/BambuMan/BambuMan.csproj -c Debug -f net10.0-ios -p:RuntimeIdentifier=iossimulator-arm64
+        run: dotnet build src/BambuMan/BambuMan.csproj -c Debug -f net10.0-ios -p:RuntimeIdentifier=iossimulator-arm64 -p:CodesignKey=-
