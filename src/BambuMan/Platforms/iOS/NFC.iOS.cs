@@ -215,7 +215,8 @@ namespace BambuMan
                             // iOS Error: NFCReaderError.NdefReaderSessionErrorZeroLengthMessage (NDEF tag does not contain any NDEF message)
                             // NFCReaderError.NdefReaderSessionErrorZeroLengthMessage constant should be equals to 403 instead of 304
                             // see https://developer.apple.com/documentation/corenfc/nfcreadererror/code/ndefreadersessionerrorzerolengthmessage
-                            if (nsError.Code != 403)
+                            // A successful read passes no error, and an empty tag passes no message.
+                            if (nsError != null && nsError.Code != 403)
                             {
                                 Invalidate(session, Configuration.Messages.NFCErrorRead);
                                 return;
@@ -223,7 +224,7 @@ namespace BambuMan
 
                             session.AlertMessage = Configuration.Messages.NFCSuccessRead;
 
-                            nTag.Records = NFCNdefPayloadExtensions.GetRecords(message.Records);
+                            nTag.Records = message != null ? NFCNdefPayloadExtensions.GetRecords(message.Records) : [];
                             OnMessageReceived?.Invoke(nTag);
                             Invalidate(session);
                         });

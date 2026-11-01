@@ -16,6 +16,7 @@ namespace BambuMan
             services.AddSingleton<IToneGenerator, IosToneGenerator>();
             services.AddTransient<IInvokeIndent, IosInvokeIndent>();
             services.AddSingleton<ISoftKeyboard, IosSoftKeyboard>();
+            services.AddSingleton<ITagProbe, IosTagProbe>();
         }
 
         public static void InitBuildVersion()
