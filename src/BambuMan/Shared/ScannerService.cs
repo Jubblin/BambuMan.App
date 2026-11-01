@@ -34,7 +34,7 @@ namespace BambuMan
         private readonly ToastService toasts;
         private readonly IReadOnlyList<ITagSource> tagSources;
 
-#if !GOOGLE_PLAY
+#if !GOOGLE_PLAY && !APP_STORE
         private bool versionChecked;
 #endif
 
@@ -119,7 +119,7 @@ namespace BambuMan
             await InitializeBackendsAsync();
             await SetupNfcAsync();
             await RefreshFilamentOverridesAsync().ConfigureAwait(false);
-#if !GOOGLE_PLAY
+#if !GOOGLE_PLAY && !APP_STORE
             if (!versionChecked)
             {
                 versionChecked = true;

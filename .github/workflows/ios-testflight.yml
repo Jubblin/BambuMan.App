@@ -100,6 +100,7 @@ jobs:
           if [ -z "$identity" ]; then echo "::error::No Apple Distribution identity found in the imported certificate"; exit 1; fi
           echo "Profile: $name ($uuid), identity: $identity"
           echo "profile=$name" >> "$GITHUB_OUTPUT"
+          echo "uuid=$uuid" >> "$GITHUB_OUTPUT"
           echo "identity=$identity" >> "$GITHUB_OUTPUT"
 
       - name: Setup .NET 10
@@ -144,3 +145,15 @@ jobs:
           api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
           # The app only uses standard HTTPS/TLS, which is exempt from export compliance
           uses-non-exempt-encryption: 'false'
+
+      # Hosted runners are discarded after the job; this matters only on a self-hosted Mac
+      - name: Remove provisioning profile
+        if: always()
+        env:
+          PROFILE_UUID: ${{ steps.signing.outputs.uuid }}
+        run: |
+          rm -f "$RUNNER_TEMP/app.mobileprovision" "$RUNNER_TEMP/profile.plist"
+          if [ -n "$PROFILE_UUID" ]; then
+            rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision" \
+                  "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+          fi
