@@ -15,6 +15,7 @@ namespace BambuMan.Implementations
     {
         private const byte MifareReadCommand = 0x30;
 
+        private NFCTagReaderSession? session;
         private TaskCompletionSource? completion;
         private Action<string>? report;
         private bool detected;
@@ -37,13 +38,24 @@ namespace BambuMan.Implementations
 
             Report($"Probe started on {DeviceInfo.Current.Model}, iOS {DeviceInfo.Current.VersionString}. Polling ISO 14443 and ISO 15693.");
 
-            var session = new NFCTagReaderSession(NFCPollingOption.Iso14443 | NFCPollingOption.Iso15693, this, DispatchQueue.MainQueue)
-            {
-                AlertMessage = "Hold the spool tag to the top of the iPhone."
-            };
-            session.BeginSession();
+            var started = completion;
 
-            return completion.Task;
+            try
+            {
+                // Kept in a field so the session lives until DidInvalidate.
+                session = new NFCTagReaderSession(NFCPollingOption.Iso14443 | NFCPollingOption.Iso15693, this, DispatchQueue.MainQueue)
+                {
+                    AlertMessage = "Hold the spool tag to the top of the iPhone."
+                };
+                session.BeginSession();
+            }
+            catch (Exception ex)
+            {
+                Report($"Probe could not start: {ex.Message}");
+                Complete();
+            }
+
+            return started.Task;
         }
 
         public override void DidDetectTags(NFCTagReaderSession session, INFCTag[] tags)
@@ -100,11 +112,18 @@ namespace BambuMan.Implementations
             }
             finally
             {
-                var done = completion;
-                completion = null;
-                report = null;
-                done?.TrySetResult();
+                Complete();
             }
+        }
+
+        /// <summary>Ends the run so the next probe can start a new session.</summary>
+        private void Complete()
+        {
+            var done = completion;
+            completion = null;
+            session = null;
+            report = null;
+            done?.TrySetResult();
         }
 
         private void QueryNdef(NFCTagReaderSession session, INFCTag tag)
