@@ -37,6 +37,6 @@
 		<key>UIViewControllerBasedStatusBarAppearance</key>
 		<false/>
 		<key>NSCameraUsageDescription</key>
-		<string>BambuMan uses the camera to scan spool QR codes and barcodes.</string>
+		<string>BambuMan uses the camera to scan QR codes, such as your Spoolman or Bambuddy server address.</string>
 	</dict>
 </plist>

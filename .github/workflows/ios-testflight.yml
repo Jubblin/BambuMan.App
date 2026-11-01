@@ -1,0 +1,146 @@
+name: iOS TestFlight
+
+# Manual only: builds a signed Release .ipa and uploads it to TestFlight.
+# Without the signing / App Store Connect secrets the release job is skipped (see the "check" job).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true                     # Disable the .NET logo
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true # Disable the .NET first time experience
+  DOTNET_CLI_TELEMETRY_OPTOUT: true       # Disable sending .NET CLI telemetry
+  GITHUB_VERSION_BASE: 1.2.
+
+jobs:
+
+# Secrets can't be used in a job-level `if`, so check them here and skip the release job cleanly when any is missing
+  check:
+    runs-on: ubuntu-latest
+    name: Check TestFlight secrets
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - name: Check secrets
+        id: check
+        env:
+          IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          missing=""
+          for name in IOS_CERTIFICATE_P12 IOS_CERTIFICATE_PASSWORD IOS_PROVISIONING_PROFILE APPSTORE_API_KEY_ID APPSTORE_API_ISSUER_ID APPSTORE_API_PRIVATE_KEY; do
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::notice::TestFlight upload skipped. Missing secrets:$missing"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+# Signed App Store build + TestFlight upload
+  testflight:
+    needs: check
+    if: needs.check.outputs.ready == 'true'
+    # Same toolchain pin as ios-build.yml (Xcode and the iOS workload are a pair). Bump both files together.
+    runs-on: macos-26
+    name: iOS TestFlight
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      WORKLOAD_VERSION: 10.0.401
+    steps:
+
+      - name: Set Build Number Environment Variable
+        run: |
+          echo "GITHUB_VERSION_CODE=$((${{ github.run_number }}+100))" >> "$GITHUB_ENV"
+          echo "GITHUB_VERSION=${GITHUB_VERSION_BASE}$((${{ github.run_number }}+100))" >> "$GITHUB_ENV"
+
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # Optional, same secret as the Android build; without it tag uploads stay unsigned as in local builds
+      - name: Inject Production Secrets
+        env:
+          HMAC_KEY: ${{ secrets.ANDROID_HMAC_KEY }}
+        run: |
+          if [ -n "$HMAC_KEY" ]; then
+            sed -i '' "s|___HMAC_SECRET_PLACEHOLDER___|${HMAC_KEY}|" src/BambuMan.Shared/Services/TagApiService.cs
+          else
+            echo "::warning::ANDROID_HMAC_KEY is not set; the tag upload signing key is not injected."
+          fi
+
+      - name: Import distribution certificate
+        uses: apple-actions/import-codesign-certs@v7
+        with:
+          p12-file-base64: ${{ secrets.IOS_CERTIFICATE_P12 }}
+          p12-password: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+
+      # Installs the App Store profile and exposes its name and the signing identity for the build
+      - name: Install provisioning profile
+        id: signing
+        env:
+          IOS_PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+        run: |
+          profile="$RUNNER_TEMP/app.mobileprovision"
+          echo "$IOS_PROVISIONING_PROFILE" | base64 --decode > "$profile"
+          security cms -D -i "$profile" > "$RUNNER_TEMP/profile.plist"
+          uuid=$(plutil -extract UUID raw "$RUNNER_TEMP/profile.plist")
+          name=$(plutil -extract Name raw "$RUNNER_TEMP/profile.plist")
+          for dir in "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+            mkdir -p "$dir"
+            cp "$profile" "$dir/$uuid.mobileprovision"
+          done
+          identity=$(security find-identity -v -p codesigning | grep -o '"Apple Distribution[^"]*"' | head -n 1 | tr -d '"')
+          if [ -z "$identity" ]; then echo "::error::No Apple Distribution identity found in the imported certificate"; exit 1; fi
+          echo "Profile: $name ($uuid), identity: $identity"
+          echo "profile=$name" >> "$GITHUB_OUTPUT"
+          echo "identity=$identity" >> "$GITHUB_OUTPUT"
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.4xx
+
+      - name: Install MAUI Workload
+        run: dotnet workload install maui --version ${{ env.WORKLOAD_VERSION }}
+
+      # The bundle id defaults to ApplicationId in BambuMan.csproj; set the IOS_BUNDLE_ID repository variable to override it
+      - name: Build MAUI iOS (App Store)
+        env:
+          BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID }}
+        run: |
+          bundle_args=()
+          if [ -n "$BUNDLE_ID" ]; then bundle_args=("-p:ApplicationId=$BUNDLE_ID"); fi
+          dotnet publish src/BambuMan/BambuMan.csproj -c Release -f net10.0-ios -p:IosStoreBuild=true \
+            -p:CodesignKey="${{ steps.signing.outputs.identity }}" -p:CodesignProvision="${{ steps.signing.outputs.profile }}" \
+            -p:GITHUB_VERSION="${{ env.GITHUB_VERSION }}" -p:GITHUB_VERSION_CODE="${{ env.GITHUB_VERSION_CODE }}" "${bundle_args[@]}"
+
+      - name: Find IPA
+        id: ipa
+        run: |
+          ipa=$(find src/BambuMan/bin/Release/net10.0-ios -name '*.ipa' | head -n 1)
+          if [ -z "$ipa" ]; then echo "::error::No .ipa was produced"; exit 1; fi
+          echo "path=$ipa" >> "$GITHUB_OUTPUT"
+
+      - name: Upload iOS IPA
+        uses: actions/upload-artifact@v6
+        with:
+          name: bambuman-ios-ipa
+          path: ${{ steps.ipa.outputs.path }}
+          retention-days: 2
+
+      - name: Upload to TestFlight
+        uses: apple-actions/upload-testflight-build@v5
+        with:
+          app-path: ${{ steps.ipa.outputs.path }}
+          issuer-id: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          api-key-id: ${{ secrets.APPSTORE_API_KEY_ID }}
+          api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          # The app only uses standard HTTPS/TLS, which is exempt from export compliance
+          uses-non-exempt-encryption: 'false'
