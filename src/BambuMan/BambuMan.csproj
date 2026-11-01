@@ -2,6 +2,8 @@
 
 	<PropertyGroup>
 		<TargetFrameworks>net10.0-android</TargetFrameworks>
+		<!-- iOS needs Xcode, so only add it when building on a Mac; Windows/Android builds are unaffected -->
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx'))">$(TargetFrameworks);net10.0-ios</TargetFrameworks>
 		<!-- Uncomment to also build the tizen app. You will need to install tizen by following this: https://github.com/Samsung/Tizen.NET -->
 		<!-- <TargetFrameworks>$(TargetFrameworks);net9.0-tizen</TargetFrameworks> -->
 
@@ -43,6 +45,20 @@
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-android|AnyCPU'">
 	  <DebugSymbols>False</DebugSymbols>
+	</PropertyGroup>
+
+	<!-- iOS versions use the same CI scheme as Android: GITHUB_VERSION = GITHUB_VERSION_BASE + build number (CFBundleShortVersionString),
+	     GITHUB_VERSION_CODE = build number (CFBundleVersion). Local builds keep the values above. -->
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+		<ApplicationDisplayVersion Condition="'$(GITHUB_VERSION)' != ''">$(GITHUB_VERSION)</ApplicationDisplayVersion>
+		<ApplicationVersion Condition="'$(GITHUB_VERSION_CODE)' != ''">$(GITHUB_VERSION_CODE)</ApplicationVersion>
+	</PropertyGroup>
+
+	<!-- iOS App Store / TestFlight build: pass -p:IosStoreBuild=true with -p:CodesignKey and -p:CodesignProvision (nothing is hard-coded here).
+	     APP_STORE is the iOS counterpart of the Android Play build's GOOGLE_PLAY: live Sentry environment, and no GitHub-release update banner (store builds update through the store). -->
+	<PropertyGroup Condition="'$(IosStoreBuild)' == 'true' AND $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+		<RuntimeIdentifier>ios-arm64</RuntimeIdentifier>
+		<DefineConstants>$(DefineConstants);BUILD_TYPE_LIVE;APP_STORE</DefineConstants>
 	</PropertyGroup>
 	
 	<ItemGroup>

@@ -29,13 +29,14 @@
 		<key>XSAppIconAssets</key>
 		<string>Assets.xcassets/appicon.appiconset</string>
 		<key>NFCReaderUsageDescription</key>
-		<string>NFC tag to read NDEF messages into the application</string>
+		<string>BambuMan uses NFC only for an optional diagnostic tag probe, which shows a tag's type and ID. iPhone NFC can't read Bambu Lab spool data.</string>
 		<key>com.apple.developer.nfc.readersession.iso7816.select-identifiers</key>
 		<array>
-			<string>com.apple.developer.nfc.readersession.iso7816.select-identifiers</string>
 			<string>D2760000850100</string>
 		</array>
+		<key>UIViewControllerBasedStatusBarAppearance</key>
+		<false/>
 		<key>NSCameraUsageDescription</key>
-		<string>Enable camera for barcode scanning.</string>
+		<string>BambuMan uses the camera to scan QR codes, such as your Spoolman or Bambuddy server address.</string>
 	</dict>
 </plist>

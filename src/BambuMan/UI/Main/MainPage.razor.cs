@@ -34,7 +34,8 @@ namespace BambuMan.UI.Main
         {
             { SpoolmanConnecting: true } => "info",
             { ErrorMessage: not null } => "error",
-            { NfcIsEnabled: false } => "caution",
+            { CanReadTags: false } => "caution",
+            { PhoneNfcReadsTags: true, NfcIsEnabled: false } => "caution",
             _ => "success"
         };
 
@@ -42,12 +43,15 @@ namespace BambuMan.UI.Main
         {
             { SpoolmanConnecting: true } => $"Connecting to {Vm.BackendLabel} …",
             { ErrorMessage: not null } => "Needs attention",
-            { NfcIsEnabled: false } => "NFC is disabled",
+            { CanReadTags: false } => "No tag reader",
+            { PhoneNfcReadsTags: true, NfcIsEnabled: false } => "NFC is disabled",
             _ => "Ready to read spools"
         };
 
         private string NfcStatus => Vm switch
         {
+            { CanReadTags: false } => "idle",
+            { PhoneNfcReadsTags: false } => "success",
             { NfcIsEnabled: false } => "error",
             { DeviceIsListening: true } => "success",
             _ => "idle"

@@ -143,6 +143,44 @@
         </div>
     }
 
+    @if (Vm.CanProbeTags)
+    {
+        <div class="card">
+            <div class="section-title">Diagnostics</div>
+
+            <div class="toggle-list">
+                <ToggleRow Title="NFC diagnostics" Description="Shows a tag probe that reports what this iPhone's NFC sees on a tag. It can't read spool data." Value="Vm.NfcDiagnostics" ValueChanged="v => Set(() => Vm.NfcDiagnostics = v)" />
+            </div>
+
+            @if (Vm.NfcDiagnostics)
+            {
+                <div class="stack">
+                    <p class="small subtle">The result, including the tag's UID, is shown here and added to the logs. It stays on this phone unless you copy it or tap Email logs.</p>
+
+                    <div>
+                        <button type="button" class="btn btn-outline" disabled="@Vm.ProbeRunning" @onclick="RunTagProbeAsync">
+                            <Blazicon Svg="Lucide.Nfc" /> @(Vm.ProbeRunning ? "Probing …" : "Run tag probe")
+                        </button>
+                    </div>
+
+                    @if (Vm.ProbeLines.Count > 0)
+                    {
+                        <div class="logs mono">
+                            @foreach (var line in Vm.ProbeLines)
+                            {
+                                <p class="log-line">@line</p>
+                            }
+                        </div>
+
+                        <div>
+                            <button type="button" class="btn btn-secondary btn-sm" disabled="@Vm.ProbeRunning" @onclick="CopyProbeResultAsync"><Blazicon Svg="Lucide.Copy" /> Copy result</button>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+
     <a class="btn btn-primary btn-block" href=""><Blazicon Svg="Lucide.Nfc" /> Back to scanner</a>
 
 </div>

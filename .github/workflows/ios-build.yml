@@ -1,0 +1,82 @@
+name: iOS Build
+
+on:
+  push:
+    branches: [ main, ios-create ]
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.gitignore'
+      - '**/*.gitattributes'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true                     # Disable the .NET logo
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true # Disable the .NET first time experience
+  DOTNET_CLI_TELEMETRY_OPTOUT: true       # Disable sending .NET CLI telemetry
+
+jobs:
+
+# MAUI iOS simulator build (unsigned, no secrets)
+  build-ios:
+    # GA image. Xcode and the iOS workload are pinned as a pair: each .NET for iOS SDK requires one exact Xcode version
+    # (workload set 10.0.401 ships Microsoft.NET.Sdk.iOS 26.5.10318, which requires Xcode 26.6). Bump both together.
+    runs-on: macos-26
+    name: iOS Build
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      WORKLOAD_VERSION: 10.0.401
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.4xx
+
+      - name: Install MAUI Workload
+        run: dotnet workload install maui --version ${{ env.WORKLOAD_VERSION }}
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          dotnet --info
+          dotnet workload list
+
+      # The NFC entitlements make the simulator build sign the app; CodesignKey=- signs it ad-hoc, so no certificate or secrets are needed
+      - name: Build MAUI iOS (simulator)
+        run: dotnet build src/BambuMan/BambuMan.csproj -c Debug -f net10.0-ios -p:RuntimeIdentifier=iossimulator-arm64 -p:CodesignKey=-
+
+# Android build + tests on a GitHub-hosted runner (unsigned, no secrets), so changes on this branch have Android evidence
+  build-android:
+    runs-on: ubuntu-latest
+    name: Android Build and Tests
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.4xx
+
+      - name: Install MAUI Android Workload
+        run: dotnet workload install maui-android
+
+      - name: Build MAUI Android (unsigned)
+        run: dotnet build src/BambuMan/BambuMan.csproj -c Debug -f net10.0-android
+
+      # xunit.v3 test projects run on Microsoft.Testing.Platform, which the .NET 10 SDK's VSTest-mode `dotnet test` rejects; run them directly
+      - name: Run Tests
+        if: ${{ !cancelled() }}
+        run: |
+          dotnet run --project src/BambuMan.Shared.Test/BambuMan.Shared.Test.csproj
+          dotnet run --project src/SpoolMan.Api.Test/SpoolMan.Api.Test.csproj
+          dotnet run --project src/Bambuddy.Api.Test/Bambuddy.Api.Test.csproj

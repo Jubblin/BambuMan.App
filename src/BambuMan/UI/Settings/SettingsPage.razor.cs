@@ -1,3 +1,4 @@
+using BambuMan.Interfaces;
 using BambuMan.Shared.Enums;
 using BambuMan.Shared.Managers;
 using BambuMan.Shared.Resolvers;
@@ -29,6 +30,7 @@ public partial class SettingsPage
     public const string KeyBambuddyUrl = "bambuddy_url";
     public const string KeyBambuddyApiKey = "bambuddy_api_key";
     public const string KeyStoreSpoolsLocally = "store_spools_locally";
+    public const string KeyNfcDiagnostics = "nfc_diagnostics";
 
     /// <summary>Raised after a setting is stored, for parts of the ui outside this page that depend on it (the menu).</summary>
     public static event Action? SettingsChanged;
@@ -39,12 +41,15 @@ public partial class SettingsPage
     private bool consentVisible;
     private bool consentDismissible;
     private bool testingConnection;
+    private ITagProbe? tagProbe;
 
     [Inject] private SettingsPageViewModel Vm { get; set; } = null!;
     [Inject] private ILogger<SettingsPage> Logger { get; set; } = null!;
     [Inject] private IInventoryBackendResolver Backends { get; set; } = null!;
     [Inject] private QrScanService QrScan { get; set; } = null!;
     [Inject] private ToastService Toasts { get; set; } = null!;
+    [Inject] private LogService Logs { get; set; } = null!;
+    [Inject] private IServiceProvider Services { get; set; } = null!;
 
     /// <summary>
     /// The active inventory backend. An explicit saved choice always wins; with no saved choice, an upgrade from a
@@ -98,6 +103,10 @@ public partial class SettingsPage
             Vm.StoreSpoolsLocally = Preferences.Default.Get(KeyStoreSpoolsLocally, false);
             Vm.OverrideLocationOnRead = Backends.Resolve(GetInventoryBackend()).OverrideLocationOnRead;
 
+            tagProbe = Services.GetService<ITagProbe>();
+            Vm.CanProbeTags = tagProbe != null;
+            Vm.NfcDiagnostics = Vm.CanProbeTags && Preferences.Default.Get(KeyNfcDiagnostics, false);
+
             // First visit: ask about the research upload before anything else.
             if (!Preferences.Default.Get(TagUploadConsentShown, false))
             {
@@ -150,6 +159,7 @@ public partial class SettingsPage
         Preferences.Default.Set(ShowKeyboardOnSpoolRead, Vm.ShowKeyboardOnSpoolRead);
         Preferences.Default.Set(FullTagScanAndUpload, Vm.FullTagScanAndUpload);
         Preferences.Default.Set(KeyStoreSpoolsLocally, Vm.StoreSpoolsLocally);
+        if (Vm.CanProbeTags) Preferences.Default.Set(KeyNfcDiagnostics, Vm.NfcDiagnostics);
 
         foreach (var manager in Backends.All) manager.OverrideLocationOnRead = Vm.OverrideLocationOnRead;
 
@@ -400,6 +410,53 @@ public partial class SettingsPage
         {
             Logger.LogDebug("Test Bambuddy URL failed: {Message}", ex.Message);
             Toasts.Show($"Connection failed: {ex.Message}", ToastKind.Error, true);
+        }
+    }
+
+    #endregion
+
+    #region Tag probe
+
+    private async Task RunTagProbeAsync()
+    {
+        if (tagProbe == null || Vm.ProbeRunning) return;
+
+        Vm.ProbeRunning = true;
+        Vm.ProbeLines = [];
+
+        try
+        {
+            await tagProbe.RunAsync(AddProbeLine);
+        }
+        catch (Exception ex)
+        {
+            AddProbeLine($"Probe error: {ex.Message}");
+            Logger.LogError(ex, "Error in RunTagProbeAsync");
+        }
+        finally
+        {
+            Vm.ProbeRunning = false;
+        }
+    }
+
+    /// <summary>Shows a probe finding and adds it to the in-app log, which leaves the device only through Email logs.</summary>
+    private void AddProbeLine(string line)
+    {
+        Vm.ProbeLines = [.. Vm.ProbeLines, line];
+        _ = Logs.AddLog(BambuMan.Shared.Enums.LogLevel.Information, $"Tag probe: {line}");
+    }
+
+    private async Task CopyProbeResultAsync()
+    {
+        try
+        {
+            await Clipboard.Default.SetTextAsync(string.Join(Environment.NewLine, Vm.ProbeLines));
+            Toasts.Show("Probe result copied", ToastKind.Success);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error in CopyProbeResultAsync");
+            Toasts.Show("Failed to copy the probe result", ToastKind.Error);
         }
     }
 

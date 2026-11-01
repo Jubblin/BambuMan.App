@@ -58,6 +58,12 @@ namespace BambuMan.UI.Settings
         [ObservableProperty] private string? bambuddyApiKeyError;
         [ObservableProperty] private string? defaultPriceError;
 
+        /// <summary>True when this platform has a tag probe (iOS). Without one, the diagnostics card is hidden.</summary>
+        [ObservableProperty] private bool canProbeTags;
+        [ObservableProperty] private bool nfcDiagnostics;
+        [ObservableProperty] private bool probeRunning;
+        [ObservableProperty] private IReadOnlyList<string> probeLines = [];
+
         public bool IsSpoolman => InventoryBackend == InventoryBackend.Spoolman;
         public bool IsBambuddy => InventoryBackend == InventoryBackend.Bambuddy;
         public bool IsNoBackend => InventoryBackend == InventoryBackend.NoBackend;

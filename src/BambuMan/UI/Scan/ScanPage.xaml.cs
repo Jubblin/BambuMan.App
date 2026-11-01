@@ -20,6 +20,12 @@ namespace BambuMan.UI.Scan
             this.logger = logger;
             InitializeComponent();
             BackButton.Text = "<";
+#if IOS
+            // The camera fills the screen, but the back button has to sit below the notch / Dynamic Island.
+            ButtonBar.SafeAreaEdges = SafeAreaEdges.All;
+            AbsoluteLayout.SetLayoutFlags(ButtonBar, Microsoft.Maui.Layouts.AbsoluteLayoutFlags.WidthProportional);
+            AbsoluteLayout.SetLayoutBounds(ButtonBar, new Rect(0, 0, 1, AbsoluteLayout.AutoSize));
+#endif
         }
 
         /// <summary>URLs are validated against the URL regex; API keys (and other free text) are not.</summary>

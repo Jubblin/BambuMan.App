@@ -1148,6 +1148,15 @@ body.editing .content {
     font-weight: 600;
 }
 
+/* iPhone without a tag reader: the explanation, then the paths that still work. */
+.no-reader-list {
+    margin: 12px 0 0;
+    padding-left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
 .connecting {
     display: flex;
     flex-direction: column;

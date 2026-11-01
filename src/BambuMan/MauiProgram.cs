@@ -22,6 +22,9 @@ namespace BambuMan
 #if ANDROID
             MainApplication.InitBuildVersion();
             MainApplication.SetupSerilog();
+#elif IOS
+            AppDelegate.InitBuildVersion();
+            AppDelegate.SetupSerilog();
 #endif
             var builder = MauiApp.CreateBuilder();
 
@@ -113,6 +116,8 @@ namespace BambuMan
 
 #if ANDROID
             MainApplication.SetupImplementations(services);
+#elif IOS
+            AppDelegate.SetupImplementations(services);
 #endif
 
 #if DEBUG
